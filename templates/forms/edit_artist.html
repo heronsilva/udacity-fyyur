@@ -1,0 +1,148 @@
+{% extends 'layouts/main.html' %}
+{% block title %}Edit Artist{% endblock %}
+{% block content %}
+    <div>
+        <h3>Edit artist <em>{{ artist.name }}</em></h3>
+        <form method="post" class="form" action="/artists/{{ artist.id }}/edit">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="name">Name</label>
+                        {{ form.name(class_ = 'form-control', autofocus = true) }}
+                    </div>
+                    <div class="form-group">
+                        <label>City & State</label>
+                        <div class="form-inline">
+                            <div class="form-group">
+                                {{ form.city(class_ = 'form-control', placeholder='City', autofocus = true) }}
+                            </div>
+                            <div class="form-group">
+                                {{ form.state(class_ = 'form-control', placeholder='State', autofocus = true) }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">Phone</label>
+                        {{ form.phone(class_ = 'form-control', placeholder='xxx-xxx-xxxx', autofocus = true) }}
+                    </div>
+                    <div class="form-group">
+                        <label for="genres">Genres</label>
+                        <small>Ctrl+Click to select multiple</small>
+                        {{ form.genres(class_ = 'form-control', placeholder='Genres, separated by commas', autofocus = true) }}
+                    </div>
+                    <div class="form-group">
+                        <label for="facebook_link">Facebook Link</label>
+                        {{ form.facebook_link(class_ = 'form-control', placeholder='http://', autofocus = true) }}
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image_link">Image Link</label>
+                        {{ form.image_link(class_ = 'form-control', placeholder='http://', autofocus = true) }}
+                    </div>
+
+                    <div class="form-group">
+                        <label for="website_link">Website Link</label>
+                        {{ form.website_link(class_ = 'form-control', placeholder='http://', autofocus = true) }}
+                    </div>
+                </div>
+                <div class="col-md-6">
+
+                    <div class="form-group">
+                        <label for="seeking_venue">Looking for Venues</label>
+                        {{ form.seeking_venue(placeholder='Venue', autofocus = true) }}
+                    </div>
+
+                    <div class="form-group">
+                        <label for="seeking_description">Seeking Description</label>
+                        {{ form.seeking_description(class_ = 'form-control', autofocus = true) }}
+                    </div>
+                    <div class="form-group">
+                        {% for schedule in artist.available_schedules %}
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <input class="schedule_day"
+                                           data-day="{{ schedule.day_of_week }}"
+                                           type="checkbox"
+                                           name="{{ schedule.day_of_week }}"
+                                            {{ "checked" if schedule.available }}
+                                            {{ "disabled" if not artist.seeking_venue }}>
+                                    <label class="control-label">{{ schedule.day_of_week }}</label>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="input-group">
+                                        <span class="input-group-addon">Start</span>
+                                        <input type="time"
+                                               min="09:00"
+                                               max="23:59:59"
+                                                {% if schedule.available %}
+                                               value="{{ schedule.start_time|datetime('time') }}"
+                                                {% endif %}
+                                               name="{{ schedule.day_of_week }}_schedule_start_time"
+                                               id="{{ schedule.day_of_week }}_start_time"
+                                               class="form-control schedule_time"
+                                                {{ "disabled" if not schedule.available }}
+
+                                        >
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="input-group">
+                                        <span class="input-group-addon">End</span>
+                                        <input type="time"
+                                               min="09:00"
+                                               max="23:59"
+                                                {% if schedule.available %}
+                                               value="{{ schedule.end_time|datetime('time') }}"
+                                                {% endif %}
+                                               name="{{ schedule.day_of_week }}_schedule_end_time"
+                                               id="{{ schedule.day_of_week }}_end_time"
+                                               class="form-control schedule_time"
+                                                {{ "disabled" if not schedule.available }}
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg btn-block">
+                        Edit Artist
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <script type="text/javascript">
+        document.getElementById('seeking_venue').addEventListener('change', event => {
+            document.querySelectorAll('.schedule_time, .schedule_day').forEach(el => {
+                const seekingDescription = document.getElementById('seeking_description')
+
+                if (!event.target.checked) {
+                    el.setAttribute('disabled', 'disabled')
+                    el.checked = false
+                    seekingDescription.setAttribute('disabled', 'disabled')
+
+                    return
+                }
+
+                el.removeAttribute('disabled')
+                seekingDescription.removeAttribute('disabled')
+            })
+        })
+
+        document.querySelectorAll('.schedule_day').forEach(el => {
+            el.addEventListener('change', event => {
+                const day = event.target.getAttribute('data-day')
+
+                const startTime = document.getElementById(`${day}_start_time`)
+                const endTime = document.getElementById(`${day}_end_time`)
+
+                startTime.toggleAttribute('disabled')
+                endTime.toggleAttribute('disabled')
+
+                startTime.addEventListener('change', event => {
+                    endTime.setAttribute('min', event.target.value)
+                })
+            })
+        })
+    </script>
+{% endblock %}
