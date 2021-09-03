@@ -493,11 +493,11 @@ def create_show_submission():
                 artist_id=form.artist_id.data,
                 venue_id=form.venue_id.data,
                 name=form.name.data,
-                start_time=form.start_time
+                start_time=form.start_time.data
             )
 
-            start_time = datetime.fromisoformat(show.start_time).time()
-            day_of_week = datetime.fromisoformat(show.start_time).strftime('%A')
+            start_time = show.start_time.time()
+            day_of_week = show.start_time.strftime('%A')
 
             artist_schedules = ArtistSchedule.query \
                 .filter(ArtistSchedule.artist_id == show.artist_id,
