@@ -1,8 +1,12 @@
+import sys
+
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import or_
+from sqlalchemy.orm import backref
 
 from enums import DaysOfWeek
 
-db = SQLAlchemy()
+db = SQLAlchemy(session_options={"expire_on_commit": False})
 
 
 class Venue(db.Model):
@@ -21,6 +25,64 @@ class Venue(db.Model):
     state = db.Column(db.String(120))
     website = db.Column(db.String(120))
     created_at = db.Column(db.DateTime, server_default=db.func.now())
+
+    @classmethod
+    def get(cls, venue_id):
+        return cls.query \
+            .filter_by(id=venue_id) \
+            .join(Show, Show.venue_id == cls.id, isouter=True) \
+            .first()
+
+    @classmethod
+    def list(cls):
+        return cls.query.all()
+
+    @classmethod
+    def search(cls, search_term):
+        return cls.query \
+            .add_columns(Venue.id, Venue.name) \
+            .filter(or_(Venue.name.ilike(f'%{search_term}%'),
+                        Venue.city.ilike(f'%{search_term}%'),
+                        Venue.state.ilike(f'%{search_term}%'))) \
+            .all()
+
+    def save(self):
+        try:
+            db.session.add(self)
+            db.session.commit()
+        except:
+            db.session.rollback()
+            print(sys.exc_info())
+
+            raise
+        finally:
+            db.session.close()
+
+    def update(self):
+        try:
+            db.session.commit()
+        except:
+            db.session.rollback()
+            print(sys.exc_info())
+
+            raise
+        finally:
+            db.session.close()
+
+    @classmethod
+    def delete(cls, venue_id):
+        try:
+            venue = Venue.query.get(venue_id)
+
+            db.session.delete(venue)
+            db.session.commit()
+        except:
+            db.session.rollback()
+            print(sys.exc_info())
+
+            raise
+        finally:
+            db.session.close()
 
 
 class Artist(db.Model):
@@ -41,8 +103,49 @@ class Artist(db.Model):
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     available_schedules = db.relationship('ArtistSchedule', backref='artist')
 
-    def __repr__(self):
-        return "%s(%r)" % (self.__class__, self.__dict__)
+    def save(self):
+        try:
+            db.session.add(self)
+            db.session.commit()
+        except:
+            db.session.rollback()
+            print(sys.exc_info())
+
+            raise
+        finally:
+            db.session.close()
+
+    @classmethod
+    def get(cls, id):
+        return cls.query \
+            .filter_by(id=id) \
+            .join(Show, Show.artist_id == Artist.id, isouter=True) \
+            .first()
+
+    @classmethod
+    def list(cls):
+        return cls.query.values(Artist.id, Artist.name)
+
+    @classmethod
+    def search(cls, search_term):
+        return cls.query \
+            .join(Show, cls.id == Show.artist_id, isouter=True) \
+            .add_columns(cls.id, cls.name) \
+            .filter(or_(cls.name.ilike(f'%{search_term}%'),
+                        cls.city.ilike(f'%{search_term}%'),
+                        cls.state.ilike(f'%{search_term}%'))) \
+            .all()
+
+    def update(cls):
+        try:
+            db.session.commit()
+        except:
+            db.session.rollback()
+            print(sys.exc_info())
+
+            raise
+        finally:
+            db.session.close()
 
 
 class ArtistSchedule(db.Model):
@@ -57,9 +160,6 @@ class ArtistSchedule(db.Model):
     available = db.Column(db.Boolean(), nullable=False, default=True)
     start_time = db.Column(db.Time, nullable=True, default='09:00:00')
     end_time = db.Column(db.Time, nullable=True, default='23:59:59')
-
-    def __repr__(self):
-        return "%s(%r)" % (self.__class__, self.__dict__)
 
 
 class Album(db.Model):
@@ -90,13 +190,31 @@ class Show(db.Model):
     start_time = db.Column(db.DateTime, nullable=False)
     artist = db.relationship(
         'Artist',
-        backref='shows',
+        cascade='all,delete',
+        backref=backref('shows', cascade='all,delete'),
         lazy='joined',
-        cascade='all, delete'
     )
     venue = db.relationship(
         'Venue',
-        backref='shows',
+        cascade='all, delete',
+        backref=backref('shows', cascade='all,delete'),
         lazy='joined',
-        cascade='all, delete'
     )
+
+    def save(self):
+        try:
+            db.session.add(self)
+            db.session.commit()
+        except:
+            db.session.rollback()
+            print(sys.exc_info())
+
+            raise
+        finally:
+            db.session.close()
+
+    @classmethod
+    def list(cls):
+        return Show.query \
+            .join(Artist, Artist.id == Show.artist_id) \
+            .join(Venue, Venue.id == Show.venue_id)

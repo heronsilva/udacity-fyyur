@@ -7,7 +7,6 @@ import dateutil.parser
 from flask import Flask, render_template, request, flash, redirect, url_for
 from flask_migrate import Migrate
 from flask_moment import Moment
-from sqlalchemy import or_
 
 import config
 from enums import DaysOfWeek
@@ -75,7 +74,8 @@ def index():
 
 @app.route('/venues')
 def venues():
-    all_venues = Venue.query.all()
+    all_venues = Venue.list()
+
     locations = []
     areas = []
 
@@ -97,12 +97,7 @@ def venues():
 def search_venues():
     search_term = request.form.get('search_term')
 
-    data = Venue.query \
-        .add_columns(Venue.id, Venue.name) \
-        .filter(or_(Venue.name.ilike(f'%{search_term}%'),
-                    Venue.city.ilike(f'%{search_term}%'),
-                    Venue.state.ilike(f'%{search_term}%'))) \
-        .all()
+    data = Venue.search(search_term)
 
     response = {
         'count': len(data),
@@ -116,10 +111,7 @@ def search_venues():
 
 @app.route('/venues/<int:venue_id>')
 def show_venue(venue_id):
-    venue = Venue.query \
-        .filter_by(id=venue_id) \
-        .join(Show, Show.venue_id == Venue.id, isouter=True) \
-        .first()
+    venue = Venue.get(venue_id)
 
     if not venue:
         flash(f"Could not find a venue with the ID #{venue_id}", category='error')
@@ -157,6 +149,7 @@ def show_venue(venue_id):
         'website': venue.website,
         'facebook_link': venue.facebook_link,
         'seeking_talent': venue.seeking_talent,
+        'seeking_description': venue.seeking_description,
         'image_link': venue.image_link,
         'past_shows': past_shows,
         'past_shows_count': len(past_shows),
@@ -195,16 +188,12 @@ def create_venue_submission():
                 seeking_description=form.seeking_description.data or None,
             )
 
-            db.session.add(venue)
-            db.session.commit()
+            venue.save()
 
             flash('Venue ' + venue.name + ' was successfully listed!')
         except:
-            db.session.rollback()
             print(sys.exc_info())
             flash('An error occurred. Venue ' + form.name.data + ' could not be listed.', category='error')
-        finally:
-            db.session.close()
 
         return render_template('pages/home.html')
     else:
@@ -221,16 +210,11 @@ def create_venue_submission():
 @app.route('/venues/<venue_id>', methods=['DELETE'])
 def delete_venue(venue_id):
     try:
-        venue = Venue.query.get(venue_id)
-
-        db.session.delete(venue)
-        db.session.commit()
+        Venue.delete(venue_id)
+        flash('Venue #' + venue_id + ' was successfully deleted!')
     except:
-        db.session.rollback()
         print(sys.exc_info())
         flash(f'An error occurred. Could not delete venue with ID #{venue_id}')
-    finally:
-        db.session.close()
 
     return redirect(url_for('index'))
 
@@ -239,7 +223,7 @@ def delete_venue(venue_id):
 #  ----------------------------------------------------------------
 @app.route('/artists')
 def artists():
-    data = Artist.query.values(Artist.id, Artist.name)
+    data = Artist.list()
     return render_template('pages/artists.html', artists=data)
 
 
@@ -247,13 +231,7 @@ def artists():
 def search_artists():
     search_term = request.form.get('search_term')
 
-    data = Artist.query \
-        .join(Show, Artist.id == Show.artist_id) \
-        .add_columns(Artist.id, Artist.name) \
-        .filter(or_(Artist.name.ilike(f'%{search_term}%'),
-                    Artist.city.ilike(f'%{search_term}%'),
-                    Artist.state.ilike(f'%{search_term}%'))) \
-        .all()
+    data = Artist.search(search_term)
 
     response = {
         'count': len(data),
@@ -267,10 +245,7 @@ def search_artists():
 
 @app.route('/artists/<int:artist_id>')
 def show_artist(artist_id):
-    artist = Artist.query \
-        .filter_by(id=artist_id) \
-        .join(Show, Show.artist_id == Artist.id, isouter=True) \
-        .first()
+    artist = Artist.get(id=artist_id)
 
     if not artist:
         flash(f"Could not find an artist with the ID #{artist_id}", category='error')
@@ -325,10 +300,7 @@ def show_artist(artist_id):
 #  ----------------------------------------------------------------
 @app.route('/artists/<int:artist_id>/edit', methods=['GET'])
 def edit_artist(artist_id):
-    artist = Artist.query \
-        .filter_by(id=artist_id) \
-        .join(Show, Show.artist_id == Artist.id, isouter=True) \
-        .first()
+    artist = Artist.get(id=artist_id)
 
     form = ArtistForm(obj=artist)
 
@@ -344,7 +316,8 @@ def edit_artist_submission(artist_id):
 
     if request.method == 'POST' and form.validate():
         try:
-            artist = Artist.query.get(artist_id)
+            artist = Artist.get(id=artist_id)
+
             artist.name = form.name.data
             artist.city = form.city.data
             artist.facebook_link = form.facebook_link.data
@@ -364,13 +337,9 @@ def edit_artist_submission(artist_id):
                 schedule.start_time = request.form.get(f'{day_of_week}_schedule_start_time') if available else None
                 schedule.end_time = request.form.get(f'{day_of_week}_schedule_end_time') if available else None
 
-            db.session.commit()
+            artist.update()
         except:
-            db.session.rollback()
-            print(sys.exc_info())
             flash(f'An error occurred. Artist {artist_id} could not be updated.', category='error')
-        finally:
-            db.session.close()
 
         return redirect(url_for('show_artist', artist_id=artist_id))
     else:
@@ -398,7 +367,8 @@ def edit_venue_submission(venue_id):
 
     if request.method == 'POST' and form.validate():
         try:
-            venue = Venue.query.get(venue_id)
+            venue = Venue.get(venue_id)
+
             venue.name = form.name.data
             venue.city = form.city.data
             venue.state = form.state.data
@@ -411,12 +381,9 @@ def edit_venue_submission(venue_id):
             venue.seeking_talent = form.seeking_talent.data
             venue.seeking_description = form.seeking_description.data or None
 
-            db.session.commit()
+            venue.update()
         except:
-            db.session.rollback()
             print(sys.exc_info())
-        finally:
-            db.session.close()
 
         return redirect(url_for('show_venue', venue_id=venue_id))
     else:
@@ -462,25 +429,21 @@ def create_artist_submission():
             for day in list(DaysOfWeek):
                 selected = request.form.get(f'{day}') == 'on'
 
-                if selected:
-                    artist.available_schedules.append(
-                        ArtistSchedule(
-                            day_of_week=day.value,
-                            start_time=request.form.get(f'{day}_schedule_start_time'),
-                            end_time=request.form.get(f'{day}_schedule_end_time')
-                        )
+                artist.available_schedules.append(
+                    ArtistSchedule(
+                        day_of_week=day.value,
+                        start_time=request.form.get(f'{day}_schedule_start_time'),
+                        end_time=request.form.get(f'{day}_schedule_end_time'),
+                        available=selected
                     )
+                )
 
-            db.session.add(artist)
-            db.session.commit()
+            artist.save()
 
             flash('Artist ' + artist.name + ' was successfully listed!')
         except:
-            db.session.rollback()
             print(sys.exc_info())
             flash('An error occurred. Artist ' + request.form['name'] + ' could not be listed.', category='error')
-        finally:
-            db.session.close()
 
         return redirect(url_for('index'))
     else:
@@ -499,7 +462,7 @@ def create_artist_submission():
 
 @app.route('/shows')
 def shows():
-    result = Show.query.join(Artist, Artist.id == Show.artist_id).join(Venue, Venue.id == Show.venue_id)
+    result = Show.list()
     data = []
 
     for show in result:
@@ -547,16 +510,12 @@ def create_show_submission():
                 flash('This artist is not available during the specified time', category='error')
                 return render_template('forms/new_show.html', form=form)
 
-            db.session.add(show)
-            db.session.commit()
+            show.save()
 
             flash('Show was successfully listed!')
         except:
-            db.session.rollback()
             print(sys.exc_info())
             flash('An error occurred. Show could not be listed', category='error')
-        finally:
-            db.session.close()
 
         return redirect(url_for('index'))
     else:
